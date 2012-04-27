@@ -1,0 +1,174 @@
+<html>
+<head>
+<title>video communication example</title>
+
+<script type="text/javascript">Warp = {  config : { websocket : false }, application : { name : "Test Client", resource : "sender", guid : "warp://erlabs:auth/rt",  secret : "rt" } };</script>
+<script type="text/javascript" src="http://ergodev.verkstad.net:8080/Core-Gateway-View/warp.js"></script>
+
+<script>
+//	var serverConfig = "TURN 193.234.219.124:3478 test:1234";
+//	var serverConfig = " ";
+	var serverConfig = "STUN stun.l.google.com:19302";
+	var peerConnection;
+	var havePC = false;
+	var localStream;
+
+	
+	var warpConnection, resource, myDisplayId, myFullId, peerDisplayId, peerFullId, messages, firstPart;
+
+	function initWarp() {
+		myDisplayId = document.getElementById("myId");
+		peerDisplayId = document.getElementById("peerId");
+
+		warpConnection = Warp.rootResource;
+		warpConnection.onconnect = function (evt) {
+			myFullId = evt.luid + resource.path;
+			myDisplayId.value = evt.luid.substr(evt.luid.indexOf("gateway/")+8);
+			firstPart = evt.luid.slice(0,evt.luid.indexOf("gateway/")+8);
+			//warpConnection.open();
+		};
+		warpConnection.ondisconnect = function (evt) {
+			peerDisplayId.value = "";
+		};
+		
+		resource = warpConnection.createResource("resource");
+		//resource.inorderdelivery = true;
+		resource.onmessage = function (evt) {
+			peerDisplayId.value = evt.origin.substring(evt.origin.indexOf("gateway/")+8, evt.origin.indexOf("/sender"));
+			var rec_data = JSON.parse(evt.data);
+			console.log(rec_data);
+			dispMsg("Received", rec_data);
+			switch (rec_data.type) {
+				case "SDP":
+					switch (rec_data.subType) {
+						case "offer":
+							console.log("hoopla");
+							try {var desc = new SessionDescription(rec_data.body);} catch(e) {console.log("E parse offer:" + e);}
+							console.log("hupla");
+							if (havePC == false) {
+								try {startSession(false, desc);} catch(e) {console.log("E st s: " +e);}
+							}
+							try {peerConnection.startIce();} catch(e) {console.log("E stI: " + e);}
+							break;
+						case "answer":
+							try {var desc = new SessionDescription(rec_data.body);} catch(e) {console.log("E parse answer:" + e);}
+							peerConnection.setRemoteDescription(peerConnection.SDP_ANSWER, desc);
+							break;
+					}
+					break;
+				case "cand":
+						try {var cand = new IceCandidate(rec_data.subType, rec_data.body);} catch(e) {console.log("E parse cand:" + e);}
+						if (havePC == false) {
+							console.log("Error. Got first candidate before offer");
+						}
+
+						peerConnection.processIceMessage(cand);
+						break;
+					
+				case "End":
+					closePC();
+					break;
+
+			}
+		}
+	};
+
+ 	window.onwarpready = function() {
+		initWarp();
+	};
+
+	function dispMsg (direction, data) {
+		document.getElementById("MSGs").value += "=========" + direction + " " + data.type + " " + data.subType + "======" + "\n" + data.body + "\n";
+		document.getElementById("MSGs").scrollTop = document.getElementById("MSGs").scrollHeight - document.getElementById("MSGs").clientHeight;
+	}
+
+	function sendOutOfBand(type, subType, body) {
+		var senddata = {}; 
+		senddata.type = type;
+		senddata.subType = subType;
+		senddata.body = body;
+		var msg = JSON.stringify(senddata);
+		if(resource) {
+			resource.sendTo(firstPart + peerDisplayId.value + resource.path, "POST", msg);
+			dispMsg("Send", senddata);
+		}
+	}
+	function closePC() {
+		peerConnection.close();
+		havePC = false;
+		document.getElementById("startButton").disabled = false;
+		document.getElementById("endButton").disabled = true;		
+	}	
+
+	function endSession() {
+		sendOutOfBand("End");
+		closePC();
+	}
+
+		
+	function startSession(initiator, desc) {
+		if (window.webkitPeerConnection00) {
+			peerConnection = new webkitPeerConnection00(serverConfig, function (candidate, moreToFollow) {
+				sendOutOfBand("cand", candidate.label, candidate.toSdp());	
+			});
+			console.log("PeerConnection00");
+		} else {
+			alert("Does not support JSEP");
+		}		
+		peerConnection.addStream(localStream);
+		peerConnection.onaddstream = function (evt) {  //display incoming stream
+			document.getElementById("remoteView").src = webkitURL.createObjectURL(evt.stream);
+		};
+		if (initiator) {
+			var start = new Date().getTime();
+			var offer = peerConnection.createOffer(null);
+			var elapsed = new Date().getTime() - start;
+			console.log("time to create offer: " + elapsed);
+			peerConnection.setLocalDescription(peerConnection.SDP_OFFER, offer);
+			sendOutOfBand("SDP", "offer", offer.toSdp());
+		} else {
+			try {peerConnection.setRemoteDescription(peerConnection.SDP_OFFER, desc);} catch(e) {console.log("e: " + e);}	
+			try {var answer = peerConnection.createAnswer(desc.toSdp(), null);} catch(e) {console.log("E crA: " + e);}
+			try {peerConnection.setLocalDescription(peerConnection.SDP_ANSWER, answer);} catch(e) {console.log("E stL: " + e);}
+			sendOutOfBand("SDP", "answer", answer.toSdp());	
+		}
+
+		peerConnection.startIce();
+
+		havePC = true;
+		document.getElementById("startButton").disabled = true;
+		document.getElementById("endButton").disabled = false;		
+	};
+
+	function genStream() {
+		window.navigator.webkitGetUserMedia('audio, video', function (strm) {
+			localStream = strm;
+			document.getElementById("selfView").src = webkitURL.createObjectURL(localStream);
+			document.getElementById("selfView").muted = true;
+
+		});
+
+	};
+
+	window.onload = function() { 
+		genStream();
+	} 
+</script>
+</head>
+<body>
+	<video id="selfView" width="320" height="240" autoplay muted></video>
+	<video id="remoteView" width="320" height="240" autoplay></video>
+
+
+	<div>myId:<input type="text" id="myId" size="12">
+	peerId:<input type="text" id="peerId" size="12" >
+	</div>
+	<input type="button" onclick="startSession(true, null)" value="Startsession" id="startButton"></input>
+	<input type="button" onclick="endSession()" value="Endsession" id="endButton" disabled="true"></input>
+	<div>	MSGs:<textarea rows="35" cols="80" id="MSGs"></textarea></div>
+
+
+
+
+</body>
+</html>
