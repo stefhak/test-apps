@@ -1,0 +1,241 @@
+<html>
+<head>
+<title>video communication example</title>
+
+
+<script type="text/javascript">Warp = {  config : { websocket : false }, application : { name : "Test Client", resource : "sender", guid : "warp://erlabs:auth/rt",  secret : "rt" } };</script>
+
+<script type="text/javascript" src="http://ergodev.verkstad.net:8080/Core-Gateway-View/warp.js"></script>
+
+<script>
+//	var serverConfig = " ";
+//	var serverConfig = "TURN 193.234.219.124:3478 test:1234";
+	var serverConfig = "STUN stun.l.google.com:19302";
+	var peerConnection;
+	var APIversion;
+	var localStream = new Array();
+	var strmIx = 0;
+	var rcvStrmIx = 0;
+	var hasPC = false;
+	var PCopen = false;
+	var senddata = new Object();
+
+	
+	var warpConnection, resource,  myDisplayId, myFullId, peerDisplayId, peerFullId, messages, PCstatus, firstPart;
+
+	function initWarp() {
+		myDisplayId = document.getElementById("myId");
+		peerDisplayId = document.getElementById("peerId");
+
+		messages = document.getElementById("messages");
+
+		warpConnection = Warp.rootResource;
+		warpConnection.onconnect = function (evt) {
+			myFullId = evt.luid + resource.path;
+			myDisplayId.value = evt.luid.substr(evt.luid.indexOf("gateway/")+8);
+			firstPart = evt.luid.slice(0,evt.luid.indexOf("gateway/")+8);
+			//warpConnection.open();
+		};
+		warpConnection.ondisconnect = function (evt) {
+			peerId.value = "";
+			messages.innerHTML = "";
+		};
+		
+		resource = warpConnection.createResource("resource");
+		//resource.inorderdelivery = true;
+		resource.onmessage = function (evt) {
+			peerDisplayId.value = evt.origin.substring(evt.origin.indexOf("gateway/")+8, evt.origin.indexOf("/sender"));
+			console.log("warp message coming");
+			var rec_data = JSON.parse(evt.data);
+			console.log(rec_data);
+			switch (rec_data.type) {
+				case "SDP":
+                                        console.log("SDPSDP");
+					if (!hasPC) { 
+						console.log("had no PC");
+						setupPC();
+						hasPC = true;
+					}
+					document.getElementById("SDPs").value += "=================Received SDP:=====" + "\n" + rec_data.body + "\n";
+					document.getElementById("SDPs").scrollTop = document.getElementById("SDPs").scrollHeight - document.getElementById("SDPs").clientHeight;
+					peerConnection.processSignalingMessage(rec_data.body);
+					break;
+				case "CLOSE": 
+					peerConnection.close();
+					hasPC = false;
+					break;
+			}
+		}
+		//resource.onerror = function(evt) {
+		//	timelog("error : "+evt.response.headers[Warp.Message.HeaderName.StatusCode]);
+		//};
+	};
+
+ 
+	function sendSDPStuff(sdp) {
+		console.log("to send SDP stuff");
+		document.getElementById("SDPs").value += "=================Sending SDP:==================" + "\n" + sdp + "\n";
+		document.getElementById("SDPs").scrollTop = document.getElementById("SDPs").scrollHeight - document.getElementById("SDPs").clientHeight;
+		sendOutOfBand("SDP", sdp);
+	};
+
+	function sendOutOfBand(type, body) {
+		senddata.type = type;
+		senddata.body = body;
+		var msg = JSON.stringify(senddata);
+		if(resource)
+			resource.sendTo(firstPart + peerDisplayId.value + resource.path, "POST", msg);
+	}
+ 
+	function setupPC() {
+		if (window.webkitPeerConnection00) {
+			peerConnection = new webkitPeerConnection00(serverConfig, function (candidate, moreToFollow) {
+				sendOutOfBand("cand", candidate.label, candidate.toSdp());	
+			});
+			console.log("PeerConnection00");
+		} else {
+			alert("Does not support JSEP");
+		}		
+		document.getElementById("startSessionBut").disabled = true;
+		document.getElementById("endSessionBut").disabled = false;
+
+		peerConnection.onaddstream = function (evt) {  //display incoming stream
+			console.log("incoming stream");
+			var player = document.createElement("video");
+			player.width = 160;
+			player.heigth = 120;
+			player.muted = true;
+			player.src = webkitURL.createObjectURL(evt.stream);
+			player.autoplay = true;
+			document.getElementById("remoteViews").appendChild(player);
+		};
+		peerConnection.onremovestream = function (evt) {  //stop display incoming stream
+			console.log("stream removed");
+			document.getElementById("PCstatus").value += "stream removed" + "\n";
+		};
+		
+		peerConnection.onmessage = function (evt) {
+			console.log("PC msg received");
+			document.getElementById('messages').value += "peer: " + evt.data + "\n";
+			document.getElementById("messages").scrollTop = document.getElementById("messages").scrollHeight - document.getElementById("messages").clientHeight;
+
+		};	
+		peerConnection.onconnecting = function (evt) {
+			console.log("PC connecting");
+			document.getElementById("PCstatus").value += "connecting" + "\n";
+
+		};	
+		peerConnection.onopen = function (evt) {
+			console.log("PC opened");
+			document.getElementById("PCstatus").value += "opened" + "\n";
+			document.getElementById("sendMsgBut").disabled = false;
+		};
+		peerConnection.onclose = function (evt) {
+			console.log("PC closed");
+			document.getElementById("PCstatus").value += "closed" + "\n";
+			document.getElementById("sendMsgBut").disabled = true;
+			document.getElementById("sendVideoBut").disabled = true;
+			document.getElementById("startSessionBut").disabled = false;
+			document.getElementById("endSessionBut").disabled = true;
+
+		};	
+		peerConnection.onerror = function (evt) {
+			console.log("PC error");
+			document.getElementById("PCstatus").value += "error" + "\n";
+
+		};	
+	
+		console.log("PC created");
+		hasPC = true;
+		
+	};
+
+	function sendMsg() {
+		if (hasPC && (document.getElementById('messageToSend').value != '')) {
+			peerConnection.send(document.getElementById('messageToSend').value);
+			document.getElementById('messages').value += "me: " + document.getElementById('messageToSend').value + "\n";
+			document.getElementById("messages").scrollTop = document.getElementById("messages").scrollHeight - document.getElementById("messages").clientHeight;
+			document.getElementById('messageToSend').value = '';
+		}
+        };
+
+
+	function endCommunication() {
+		peerConnection.close();
+		hasPC = false;
+		sendOutOfBand("CLOSE", "");
+	};
+	function genStream() {
+		window.navigator.webkitGetUserMedia('audio, video', function (strm) {
+			localStream[strmIx] = strm;
+			strmIx++;
+			var player = document.createElement("video");
+			player.width = 160;
+			player.heigth = 120;
+			player.muted = true;
+			player.src = webkitURL.createObjectURL(strm);
+			player.autoplay = true;
+			document.getElementById("selfViews").appendChild(player);
+			var addBut = document.createElement("input");
+			addBut.type = "button";
+			addBut.value = "send";
+			addBut.id = "addVidBut";
+			document.getElementById("selfViews").appendChild(addBut);
+			addBut.enabled = true;
+			addBut.onclick = function () {
+       				//alert("Video Chat click");
+				peerConnection.addStream(strm);
+       
+   			};
+		});
+	};
+
+	
+
+	window.onwarpready = function() {
+		initWarp();
+	};
+	window.onload = function() { 
+		if (!window.webkitPeerConnection) {
+			if (!window.webkitDeprecatedPeerConnection) { alert("You need a WebRTC capable browser.") }
+			else { 
+				APIversion = "deprecated";
+				document.getElementById("PeerConnVer").innerHTML += " Deprecated";
+			}
+		} else {
+			APIversion = "original";
+			document.getElementById("PeerConnVer").innerHTML += " Original";
+
+		}
+		if (window.webkitPeerConnection00) {
+			alert("PeerConnection00 detected"); 
+			//document.getElementById("PeerConnVer").innerHTML += " No shit, PeerConn00";
+		}
+
+	} 
+</script>
+</head>
+<body>
+	<div id="PeerConnVer">PeerConnection version in use:</div>
+	<input type="button" onclick="genStream()" value="GenStream" id="genStreamBut"></input>
+	<div id="selfViews"> </div>
+	<div id="remoteViews"> </div>
+
+
+	<div>myId:<input type="text" id="myId" size="42">
+	peerId:<input type="text" id="peerId" size="42" >
+	</div>
+
+	<div>PeerConnStatus:<textarea rows="5" cols="30" id="PCstatus"></textarea>
+	SDPs:<textarea rows="15" cols="80" id="SDPs"></textarea></div>
+
+	<input type="button" onclick="setupPC()" value="Startsession" id="startSessionBut"></input>
+	<input type="button" onclick="endCommunication()" value="End session" id="endSessionBut" disabled="true"></input>
+
+	<div>MessToSend:<input type="text" id="messageToSend" onchange="sendMsg()">
+	<input type="button" onclick="sendMsg()" value="sendMsg" id="sendMsgBut" disabled="true"></input>
+	Messages:<textarea rows="6" cols="50" id="messages"></textarea></div>
+
+
+</body>
+</html>
