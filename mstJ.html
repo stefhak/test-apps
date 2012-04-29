@@ -45,46 +45,69 @@
 		//resource.inorderdelivery = true;
 		resource.onmessage = function (evt) {
 			peerDisplayId.value = evt.origin.substring(evt.origin.indexOf("gateway/")+8, evt.origin.indexOf("/sender"));
-			console.log("warp message coming");
 			var rec_data = JSON.parse(evt.data);
 			console.log(rec_data);
+			dispMsg("Received", rec_data);
 			switch (rec_data.type) {
 				case "SDP":
-                                        console.log("SDPSDP");
-					if (!hasPC) { 
-						console.log("had no PC");
-						setupPC();
-						hasPC = true;
+					switch (rec_data.subType) {
+						case "offer":
+							console.log("hoopla");
+							try {var desc = new SessionDescription(rec_data.body);} catch(e) {console.log("E parse offer:" + e);}
+							console.log("hupla");
+							if (hasPC == false) {
+								try {setupPC();} catch(e) {console.log("E st s: " +e);}
+							}
+							try {peerConnection.setRemoteDescription(peerConnection.SDP_OFFER, desc);} catch(e) {console.log("e: " + e);}	
+							try {var answer = peerConnection.createAnswer(desc.toSdp(), "audio,video");} catch(e) {console.log("E crA: " + e);}
+							try {peerConnection.setLocalDescription(peerConnection.SDP_ANSWER, answer);} catch(e) {console.log("E stL: " + e);}
+							sendOutOfBand("SDP", "answer", answer.toSdp());	
+
+							if (hasPC == false) {
+								try {peerConnection.startIce();} catch(e) {console.log("E stI: " + e);}
+								hasPC = true;
+							}
+							break;
+						case "answer":
+							try {var desc = new SessionDescription(rec_data.body);} catch(e) {console.log("E parse answer:" + e);}
+							peerConnection.setRemoteDescription(peerConnection.SDP_ANSWER, desc);
+							break;
 					}
-					document.getElementById("SDPs").value += "=================Received SDP:=====" + "\n" + rec_data.body + "\n";
-					document.getElementById("SDPs").scrollTop = document.getElementById("SDPs").scrollHeight - document.getElementById("SDPs").clientHeight;
-					peerConnection.processSignalingMessage(rec_data.body);
 					break;
-				case "CLOSE": 
-					peerConnection.close();
-					hasPC = false;
+				case "cand":
+						try {var cand = new IceCandidate(rec_data.subType, rec_data.body);} catch(e) {console.log("E parse cand:" + e);}
+						if (hasPC == false) {
+							console.log("Error. Got first candidate before offer");
+						}
+
+						peerConnection.processIceMessage(cand);
+						break;
+					
+				case "End":
+					closePC();
 					break;
+
 			}
 		}
-		//resource.onerror = function(evt) {
-		//	timelog("error : "+evt.response.headers[Warp.Message.HeaderName.StatusCode]);
-		//};
 	};
+
 
  
-	function sendSDPStuff(sdp) {
-		console.log("to send SDP stuff");
-		document.getElementById("SDPs").value += "=================Sending SDP:==================" + "\n" + sdp + "\n";
-		document.getElementById("SDPs").scrollTop = document.getElementById("SDPs").scrollHeight - document.getElementById("SDPs").clientHeight;
-		sendOutOfBand("SDP", sdp);
-	};
+	function dispMsg (direction, data) {
+		document.getElementById("MSGs").value += "=========" + direction + " " + data.type + " " + data.subType + "======" + "\n" + data.body + "\n";
+		document.getElementById("MSGs").scrollTop = document.getElementById("MSGs").scrollHeight - document.getElementById("MSGs").clientHeight;
+	}
 
-	function sendOutOfBand(type, body) {
+	function sendOutOfBand(type, subType, body) {
+		var senddata = {}; 
 		senddata.type = type;
+		senddata.subType = subType;
 		senddata.body = body;
 		var msg = JSON.stringify(senddata);
-		if(resource)
+		if(resource) {
+			dispMsg("Send", senddata);
 			resource.sendTo(firstPart + peerDisplayId.value + resource.path, "POST", msg);
+		}
 	}
  
 	function setupPC() {
@@ -96,8 +119,6 @@
 		} else {
 			alert("Does not support JSEP");
 		}		
-		document.getElementById("startSessionBut").disabled = true;
-		document.getElementById("endSessionBut").disabled = false;
 
 		peerConnection.onaddstream = function (evt) {  //display incoming stream
 			console.log("incoming stream");
@@ -109,17 +130,7 @@
 			player.autoplay = true;
 			document.getElementById("remoteViews").appendChild(player);
 		};
-		peerConnection.onremovestream = function (evt) {  //stop display incoming stream
-			console.log("stream removed");
-			document.getElementById("PCstatus").value += "stream removed" + "\n";
-		};
 		
-		peerConnection.onmessage = function (evt) {
-			console.log("PC msg received");
-			document.getElementById('messages').value += "peer: " + evt.data + "\n";
-			document.getElementById("messages").scrollTop = document.getElementById("messages").scrollHeight - document.getElementById("messages").clientHeight;
-
-		};	
 		peerConnection.onconnecting = function (evt) {
 			console.log("PC connecting");
 			document.getElementById("PCstatus").value += "connecting" + "\n";
@@ -128,16 +139,10 @@
 		peerConnection.onopen = function (evt) {
 			console.log("PC opened");
 			document.getElementById("PCstatus").value += "opened" + "\n";
-			document.getElementById("sendMsgBut").disabled = false;
 		};
 		peerConnection.onclose = function (evt) {
 			console.log("PC closed");
 			document.getElementById("PCstatus").value += "closed" + "\n";
-			document.getElementById("sendMsgBut").disabled = true;
-			document.getElementById("sendVideoBut").disabled = true;
-			document.getElementById("startSessionBut").disabled = false;
-			document.getElementById("endSessionBut").disabled = true;
-
 		};	
 		peerConnection.onerror = function (evt) {
 			console.log("PC error");
@@ -145,26 +150,9 @@
 
 		};	
 	
-		console.log("PC created");
-		hasPC = true;
-		
+		console.log("PC created");		
 	};
 
-	function sendMsg() {
-		if (hasPC && (document.getElementById('messageToSend').value != '')) {
-			peerConnection.send(document.getElementById('messageToSend').value);
-			document.getElementById('messages').value += "me: " + document.getElementById('messageToSend').value + "\n";
-			document.getElementById("messages").scrollTop = document.getElementById("messages").scrollHeight - document.getElementById("messages").clientHeight;
-			document.getElementById('messageToSend').value = '';
-		}
-        };
-
-
-	function endCommunication() {
-		peerConnection.close();
-		hasPC = false;
-		sendOutOfBand("CLOSE", "");
-	};
 	function genStream() {
 		window.navigator.webkitGetUserMedia('audio, video', function (strm) {
 			localStream[strmIx] = strm;
@@ -183,36 +171,30 @@
 			document.getElementById("selfViews").appendChild(addBut);
 			addBut.enabled = true;
 			addBut.onclick = function () {
-       				//alert("Video Chat click");
+				if (!hasPC) {
+					setupPC();
+				}
 				peerConnection.addStream(strm);
-       
-   			};
+				var offer = peerConnection.createOffer(null);
+				peerConnection.setLocalDescription(peerConnection.SDP_OFFER, offer);
+				sendOutOfBand("SDP", "offer", offer.toSdp());
+				if (!hasPC) {
+					peerConnection.startIce();
+					hasPC = true;
+				}
+			}
 		});
 	};
 
-	
+
 
 	window.onwarpready = function() {
 		initWarp();
 	};
 	window.onload = function() { 
-		if (!window.webkitPeerConnection) {
-			if (!window.webkitDeprecatedPeerConnection) { alert("You need a WebRTC capable browser.") }
-			else { 
-				APIversion = "deprecated";
-				document.getElementById("PeerConnVer").innerHTML += " Deprecated";
-			}
-		} else {
-			APIversion = "original";
-			document.getElementById("PeerConnVer").innerHTML += " Original";
-
-		}
-		if (window.webkitPeerConnection00) {
-			alert("PeerConnection00 detected"); 
-			//document.getElementById("PeerConnVer").innerHTML += " No shit, PeerConn00";
-		}
-
+		if (!window.webkitPeerConnection00) { alert("You need a PeerConnection00 capable browser.") }
 	} 
+	
 </script>
 </head>
 <body>
@@ -222,20 +204,12 @@
 	<div id="remoteViews"> </div>
 
 
-	<div>myId:<input type="text" id="myId" size="42">
-	peerId:<input type="text" id="peerId" size="42" >
+	<div>myId:<input type="text" id="myId" size="6">
+	peerId:<input type="text" id="peerId" size="6" >
 	</div>
 
 	<div>PeerConnStatus:<textarea rows="5" cols="30" id="PCstatus"></textarea>
-	SDPs:<textarea rows="15" cols="80" id="SDPs"></textarea></div>
-
-	<input type="button" onclick="setupPC()" value="Startsession" id="startSessionBut"></input>
-	<input type="button" onclick="endCommunication()" value="End session" id="endSessionBut" disabled="true"></input>
-
-	<div>MessToSend:<input type="text" id="messageToSend" onchange="sendMsg()">
-	<input type="button" onclick="sendMsg()" value="sendMsg" id="sendMsgBut" disabled="true"></input>
-	Messages:<textarea rows="6" cols="50" id="messages"></textarea></div>
-
+	MSGs:<textarea rows="15" cols="80" id="MSGs"></textarea></div>
 
 </body>
 </html>
