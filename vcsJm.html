@@ -1,0 +1,148 @@
+<html>
+<head>
+<title>video communication example</title>
+
+<script type="text/javascript">Warp = {  config : { websocket : false }, application : { name : "Test Client", resource : "sender", guid : "warp://erlabs:auth/rt",  secret : "rt" } };</script>
+<script type="text/javascript" src="http://ergodev.verkstad.net:8080/Core-Gateway-View/warp.js"></script>
+
+<script>
+//	var serverConfig = "TURN 193.234.219.124:3478 test:1234";
+//	var serverConfig = " ";
+	var serverConfig = "STUN stun.l.google.com:19302";
+	var peerConnection;
+	var havePC = false;
+	var localStream;
+
+	
+
+			
+	function dispMsg (direction, data) {
+		document.getElementById("SDP_out").value += "=========" + direction + " " + data.type + " " + data.subType + "======" + "\n" + data.body + "\n";
+		document.getElementById("SDP_out").scrollTop = document.getElementById("SDP_out").scrollHeight - document.getElementById("SDP_out").clientHeight;
+	}
+
+
+	function signal(initiator) {
+		if (initiator) {
+			var offer = peerConnection.localDescription;
+			console.log(offer);
+			sendOutOfBand("SDP", "offer", offer.toSdp());
+		} else {
+			var answer = peerConnection.localDescription;
+			//peerConnection.setLocalDescription(peerConnection.SDP_ANSWER, answer);	
+			sendOutOfBand("SDP", "answer", answer.toSdp());	
+		}
+	}	
+
+	function sendOutOfBand(type, subType, body) {
+		var senddata = {}; 
+		senddata.type = type;
+		senddata.subType = subType;
+		senddata.body = body;
+		dispMsg("Send", senddata);
+	}
+
+		
+	function startSession(initiator, desc) {
+		if (window.webkitPeerConnection00) {
+			peerConnection = new webkitPeerConnection00(serverConfig, function (candidate, moreToFollow) {
+				if (!moreToFollow) {
+					hasCandidates = true;
+					signal(initiator);
+				}
+			});
+			console.log("PeerConnection00");
+		} else {
+			alert("Does not support JSEP");
+		}		
+		peerConnection.addStream(localStream);
+		peerConnection.onaddstream = function (evt) {  //display incoming stream
+			alert("onaddstream");
+			document.getElementById("remoteView").src = webkitURL.createObjectURL(evt.stream);
+		};
+		
+		peerConnection.onconnecting = function (evt) {
+			console.log("PC connecting");
+			document.getElementById("PCstatus").value += "connecting" + "\n";
+
+		};	
+		peerConnection.onopen = function (evt) {
+			console.log("PC opened");
+			document.getElementById("PCstatus").value += "opened" + "\n";
+		};
+		peerConnection.onclose = function (evt) {
+			console.log("PC closed");
+			document.getElementById("PCstatus").value += "closed" + "\n";
+		};	
+		peerConnection.onerror = function (evt) {
+			console.log("PC error");
+			document.getElementById("PCstatus").value += "error" + "\n";
+
+		};	
+	
+
+		
+		if (initiator) {
+			var offer = peerConnection.createOffer(null);
+			console.log(offer);
+			peerConnection.setLocalDescription(peerConnection.SDP_OFFER, offer);
+		} else {
+			try {peerConnection.setRemoteDescription(peerConnection.SDP_OFFER, desc);} catch(e) {console.log("e: " + e);}	
+			try {var ansdesc = peerConnection.createAnswer(desc.toSdp(), null);} catch(e) {console.log("E crA: " + e);}
+			try {peerConnection.setLocalDescription(peerConnection.SDP_ANSWER, ansdesc);} catch(e) {console.log("E stL: " + e);}
+}
+		peerConnection.startIce();
+
+		havePC = true;
+	};
+
+	function genStream() {
+		window.navigator.webkitGetUserMedia({audio:true, video:true}, function (strm) {
+			localStream = strm;
+			document.getElementById("selfView").src = webkitURL.createObjectURL(localStream);
+			document.getElementById("selfView").muted = true;
+
+		});
+
+	};
+	
+	function processOffer() {
+		alert("SDP_in: " + SDP_in.value);
+		var desc = new SessionDescription(SDP_in.value);
+		if (havePC == false) {
+			try {startSession(false, desc);} catch(e) {console.log("E st s: " +e);}
+		}
+		else {
+			try {peerConnection.startIce();} catch(e) {console.log("E stI: " + e);}
+		}
+	}
+	function processAnswer() {
+		var desc = new SessionDescription(SDP_in.value);
+		peerConnection.setRemoteDescription(peerConnection.SDP_ANSWER, desc);
+	}	
+
+	window.onload = function() { 
+		genStream();
+	} 
+</script>
+</head>
+<body>
+	<video id="selfView" width="320" height="240" autoplay muted></video>
+	<video id="remoteView" width="320" height="240" autoplay></video>
+
+
+	<div>myId:<input type="text" id="myId" size="12">
+	peerId:<input type="text" id="peerId" size="12" >
+	</div>
+	<input type="button" onclick="startSession(true, null)" value="Startsession" id="startButton"></input>
+	<input type="button" onclick="processOffer()" value="processOffer" id="processOffer"></input>
+	<input type="button" onclick="processAnswer()" value="processAnswer" id="processAnswer"></input>
+	<div>PeerConnStatus:<textarea rows="5" cols="30" id="PCstatus"></textarea></div>
+	<div>	<textarea rows="35" cols="80" id="SDP_out"></textarea></div>
+	<div>	<textarea rows="35" cols="80" id="SDP_in"></textarea></div>
+
+
+
+
+</body>
+</html>
