@@ -59,12 +59,12 @@
 								try {setupPC();} catch(e) {console.log("E st s: " +e);}
 							}
 							try {peerConnection.setRemoteDescription(peerConnection.SDP_OFFER, desc);} catch(e) {console.log("e: " + e);}	
-							try {var answer = peerConnection.createAnswer(desc.toSdp(), "audio,video");} catch(e) {console.log("E crA: " + e);}
+							try {var answer = peerConnection.createAnswer(desc.toSdp(), {has_video: true, has_audio: true });} catch(e) {console.log("E crA: " + e);}
 							try {peerConnection.setLocalDescription(peerConnection.SDP_ANSWER, answer);} catch(e) {console.log("E stL: " + e);}
 							sendOutOfBand("SDP", "answer", answer.toSdp());	
 
 							if (hasPC == false) {
-								try {peerConnection.startIce();} catch(e) {console.log("E stI: " + e);}
+								try {peerConnection.startIce({use_candidates: "all"});} catch(e) {console.log("E stI: " + e);}
 								hasPC = true;
 							}
 							break;
@@ -154,7 +154,7 @@
 	};
 
 	function genStream() {
-		window.navigator.webkitGetUserMedia('audio, video', function (strm) {
+		window.navigator.webkitGetUserMedia({audio:true, video:true}, function (strm) {
 			localStream[strmIx] = strm;
 			strmIx++;
 			var player = document.createElement("video");
@@ -175,9 +175,14 @@
 					setupPC();
 				}
 				peerConnection.addStream(strm);
-				var offer = peerConnection.createOffer(null);
+				console.log("added strem");
+				var offer = peerConnection.createOffer({has_video: true, has_audio: true });
+				console.log("created offer");
 				peerConnection.setLocalDescription(peerConnection.SDP_OFFER, offer);
+				console.log("applied offer");
 				sendOutOfBand("SDP", "offer", offer.toSdp());
+								console.log("sent offer");
+
 				if (!hasPC) {
 					peerConnection.startIce();
 					hasPC = true;

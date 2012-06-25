@@ -46,8 +46,6 @@
 							if (havePC == false) {
 								try {startSession(false, desc);} catch(e) {console.log("E st s: " +e);}
 							}
-
-							try {peerConnection.startIce();} catch(e) {console.log("E stI: " + e);}
 							break;
 						case "answer":
 							var desc = new SessionDescription(rec_data.body);
@@ -77,6 +75,7 @@
 	function signal(initiator) {
 		if (initiator) {
 			var offer = peerConnection.localDescription;
+			console.log(offer);
 			sendOutOfBand("SDP", "offer", offer.toSdp());
 		} else {
 			var answer = peerConnection.localDescription;
@@ -127,6 +126,7 @@
 		};
 		if (initiator) {
 			var offer = peerConnection.createOffer(null);
+			console.log(offer);
 			peerConnection.setLocalDescription(peerConnection.SDP_OFFER, offer);
 		} else {
 			try {peerConnection.setRemoteDescription(peerConnection.SDP_OFFER, desc);} catch(e) {console.log("e: " + e);}	
@@ -141,7 +141,7 @@
 	};
 
 	function genStream() {
-		window.navigator.webkitGetUserMedia('audio, video', function (strm) {
+		window.navigator.webkitGetUserMedia({audio:true, video:true}, function (strm) {
 			localStream = strm;
 			document.getElementById("selfView").src = webkitURL.createObjectURL(localStream);
 			document.getElementById("selfView").muted = true;
