@@ -124,7 +124,7 @@ function setupPC(initiator, peerId) {
 	var pc
 	log("setting up pc");
   // Create a PeerConnection and hook up the IceCallback
-  pc = new webkitRTCPeerConnection({ iceServers: [{uri:"stun:stun.l.google.com:19302"}] });
+  pc = new webkitRTCPeerConnection({ iceServers: [{url:"stun:stun.l.google.com:19302"}] });
   
   pc.onicecandidate = function (evt) {
     log("got candidate: " + evt.candidate);
