@@ -1,0 +1,188 @@
+<!doctype html>
+<html>
+<head>
+<title>Simple Client</title>
+
+<script>
+
+function SignalingChannel() {
+	var sessionId = location.hash = location.hash.substr(1) || createId();
+
+	log("sessionId: " + sessionId);
+	userId = createId();
+	log("userId: " + userId);
+
+	var _onmessage = null;
+	var _onpeer = null;
+
+	this.__defineGetter__("onmessage", function () { return _onmessage; });
+	this.__defineSetter__("onmessage", function (func) { _onmessage = func; });
+
+	this.__defineGetter__("onpeer", function () { return _onpeer; });
+	this.__defineSetter__("onpeer", function (func) { _onpeer = func; });
+
+
+
+	function createId() {
+		  return Math.random().toString(10).substr(2);
+	};
+
+	this.send = function (message, to, callback) {
+		  if (!to) {
+		      log("unable to send");
+		      return;
+		  }
+
+		  var xhr = new XMLHttpRequest();
+		  xhr.open("POST", "/ctos/" + sessionId + "/" + userId + "/" + to);
+		  xhr.setRequestHeader("Content-Type", "text/plain");
+		  xhr.send(message);
+		  xhr.onreadystatechange = function () {
+		      if (xhr.readyState == 4)
+		          log("readyState: 4; xhr.status: " + xhr.status);
+		      //if (xhr.readyState == 4 && callback instanceof Function)
+		      //    callback(xhr.status == 204);
+		  };
+		  log("xhr sent");
+	};
+
+	var es = new EventSource("/stoc/" + sessionId + "/" + userId);
+	es.addEventListener("join", function (evt) {
+		 /* if (peerUserId) {
+		      console.log("busy!");
+		      return;
+		  }*/
+
+		  var peerUserId = evt.data;
+		  log("evt.data: " + evt.data);
+		  if (_onpeer instanceof Function)
+		      _onpeer(evt.data);
+
+		  es.addEventListener("user-" + peerUserId, function (evt) {
+		      log("got message: " + evt.data);
+		      if (_onmessage instanceof Function)
+		          _onmessage(evt);
+		  }, false);
+	}, false);
+}
+
+var pc;
+var signalingChannel;
+var selfView;
+var remoteView;
+var localStream;
+var userId;
+var peers = {};
+var connections = new Array();
+
+window.onload = function () {
+  selfView = document.getElementById("self_view");
+  remoteView = document.getElementById("remote_view");
+  navigator.webkitGetUserMedia({"audio": true, "video": true}, function (stream) {
+  	localStream = stream;
+    selfView.src = webkitURL.createObjectURL(localStream);
+   	signalingChannel = new SignalingChannel();
+		signalingChannel.onmessage = function (evt) {
+		  log("signalingmessage" + evt + "sgmsg.data" + evt.data);
+		  
+		  var msg = JSON.parse(evt.data);
+		  
+		  log("msg: " + msg + "msg.from: " + msg.from);
+		 
+		  if (typeof(peers[msg.from] != "undefined") && !peers[msg.from].pc ) 
+		    peers[msg.from].pc = setupPC("false", msg.from);
+
+		  if (msg.sdp) {
+		    log("received SDP");
+			  	peers[msg.from].pc.setRemoteDescription(new RTCSessionDescription(msg.sdp));
+		        if (peers[msg.from].pc.remoteDescription.type == "offer") {
+		            peers[msg.from].pc.createAnswer(function (desc) 
+		            {peers[msg.from].pc.setLocalDescription(desc);
+				signalingChannel.send(JSON.stringify({ "from": userId, "sdp": desc }), msg.from);
+				log("SDP" + " sent");
+	});}
+		  } else {
+		    peers[msg.from].pc.addIceCandidate(new RTCIceCandidate(msg.candidate));
+		  }
+		  log("end of message handler");
+		};
+		signalingChannel.onpeer = function (evt) {
+			log("peer joined: " + evt);
+			peers[evt] = {};
+			if (parseInt(userId) >= parseInt(evt)) 
+				peers[evt].pc = setupPC("true", evt);
+		}   
+  });
+
+
+  log("load done");
+}
+
+
+// set up the PeerConnection
+function setupPC(initiator, peerId) {
+	var pc
+	log("setting up pc");
+  // Create a PeerConnection and hook up the IceCallback
+  pc = new webkitRTCPeerConnection({ iceServers: [{uri:"stun:stun.l.google.com:19302"}] });
+  
+  pc.onicecandidate = function (evt) {
+    log("got candidate: " + evt.candidate);
+    if (evt)
+    signalingChannel.send(JSON.stringify({"from": userId, "candidate": evt.candidate }), peerId);
+  };
+  
+  // add the local stream
+	pc.addStream(localStream);
+
+  // once remote stream arrives, show it in the remote video element
+  pc.onaddstream = function (evt) {
+    log("incoming stream");
+		var player = document.createElement("video");
+		player.width = 160;
+		player.heigth = 120;
+		player.muted = false;
+		player.src = webkitURL.createObjectURL(evt.stream);
+		player.autoplay = true;
+		document.getElementById("remoteViews").appendChild(player);
+  };
+
+	if (initiator == "true") {
+		pc.createOffer(function (desc) {
+			pc.setLocalDescription(desc);
+		  signalingChannel.send(JSON.stringify({ "from": userId, "sdp": desc }), peerId);
+		  log("offer" + " sent");});
+	}
+	return pc;
+}
+
+function logStates() {
+    log("state change - readyState: " + pc.readyState + ", iceState: " + pc.iceState);
+}
+
+function prettyPrintSdp(sdp) {
+    log("----------------");
+    log(sdp.toSdp().replace(/\r\n/g, "<br>"));
+    log("----------------");
+}
+
+function log(msg) {
+    if (!this.div)
+        this.div = document.getElementById("log_div");
+    this.div.innerHTML += msg + "<br>";
+}
+
+</script>
+
+</head>
+<body>
+<h2>Simple Client</h2>
+
+<video id="self_view" autoplay muted width="320" height="240"></video>
+<div id="remoteViews"> </div>
+
+
+<div id="log_div"></div>
+
+</body>
+</html>
