@@ -34,7 +34,7 @@ function SignalingChannel() {
 		  }
 
 		  var xhr = new XMLHttpRequest();
-		  xhr.open("POST", "/ctos/" + sessionId + "/" + userId + "/" + to);
+		  xhr.open("POST", "/ctoc/" + sessionId + "/" + userId + "/" + to);
 		  xhr.setRequestHeader("Content-Type", "text/plain");
 		  xhr.send(message);
 		  xhr.onreadystatechange = function () {
@@ -79,6 +79,8 @@ window.onload = function () {
   selfView = document.getElementById("self_view");
   remoteView = document.getElementById("remote_view");
   navigator.webkitGetUserMedia({"audio": true, "video": true}, function (stream) {
+  
+  	log("got local stream");
   	localStream = stream;
     selfView.src = webkitURL.createObjectURL(localStream);
    	signalingChannel = new SignalingChannel();
@@ -111,8 +113,17 @@ window.onload = function () {
 			peers[evt] = {};
 			if (parseInt(userId) >= parseInt(evt)) 
 				peers[evt].pc = setupPC("true", evt);
-		}   
-  });
+		}
+    document.getElementById("exit_but").onclick = function (evt) {
+      log("click");
+			for (var peerConn in peers) {
+				log("closing connection to: " + peerConn);
+      	peers[peerConn].pc.close();
+				log("closed ");
+      }
+		};
+ 
+	});
 
 
   log("load done");
@@ -134,24 +145,41 @@ function setupPC(initiator, peerId) {
   
   // add the local stream
 	pc.addStream(localStream);
+	
+	pc.onstatechange = function (evt) {
+		log("state change, readyState: " + pc.readyState + " RTCIceState: " + pc.iceState);
+	}
 
   // once remote stream arrives, show it in the remote video element
   pc.onaddstream = function (evt) {
     log("incoming stream");
 		var player = document.createElement("video");
-		player.width = 160;
-		player.heigth = 120;
-		player.muted = false;
+		player.width = 320;
+		player.heigth = 240;
+		player.muted = true;
 		player.src = webkitURL.createObjectURL(evt.stream);
 		player.autoplay = true;
 		document.getElementById("remoteViews").appendChild(player);
+		/*     var context = new webkitAudioContext();
+        var panner = context.createPanner();
+             panner.setPosition(-5, 0, 0);
+
+    var mediaStreamSource = context.createMediaStreamSource(evt.stream);    
+    mediaStreamSource.connect(panner);
+    panner.connect(context.destination);*/
+    
   };
+     
+	pc.onnegotiationneeded = function (evt) {
+		alert("fired");
+	}
 
 	if (initiator == "true") {
 		pc.createOffer(function (desc) {
 			pc.setLocalDescription(desc);
-		  signalingChannel.send(JSON.stringify({ "from": userId, "sdp": desc }), peerId);
-		  log("offer" + " sent");});
+			signalingChannel.send(JSON.stringify({ "from": userId, "sdp": desc }), peerId);
+			log("offer" + " sent");
+		});
 	}
 	return pc;
 }
@@ -177,8 +205,8 @@ function log(msg) {
 </head>
 <body>
 <h2>Simple Client</h2>
-
-<video id="self_view" autoplay muted width="320" height="240"></video>
+<input type="button" id="exit_but" value="Exit">
+<video id="self_view" autoplay muted width="160" height="120"></video>
 <div id="remoteViews"> </div>
 
 

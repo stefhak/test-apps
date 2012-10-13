@@ -70,7 +70,7 @@ var server = http.Server(function (request, response) {
             });
             break;
 
-        case "ctos":  // client-to-server
+        case "ctoc":  // client-to-server
             console.log("url: " + request.url);
             var sessionId = parts[2];
             var userId = parts[3];

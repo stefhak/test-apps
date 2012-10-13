@@ -43,12 +43,13 @@
 	}
 
 		
-	function startSession(initiator, desc) {
+	function startSession() {
 		if (window.webkitPeerConnection00) {
 			peerConnection = new webkitPeerConnection00(serverConfig, function (candidate, moreToFollow) {
 				if (!moreToFollow) {
 					hasCandidates = true;
-					signal(initiator);
+					alert("got candidates");
+					//signal(initiator);
 				}
 			});
 			console.log("PeerConnection00");
@@ -80,19 +81,6 @@
 
 		};	
 	
-
-		
-		if (initiator) {
-			var offer = peerConnection.createOffer(null);
-			console.log(offer);
-			peerConnection.setLocalDescription(peerConnection.SDP_OFFER, offer);
-		} else {
-			try {peerConnection.setRemoteDescription(peerConnection.SDP_OFFER, desc);} catch(e) {console.log("e: " + e);}	
-			try {var ansdesc = peerConnection.createAnswer(desc.toSdp(), null);} catch(e) {console.log("E crA: " + e);}
-			try {peerConnection.setLocalDescription(peerConnection.SDP_ANSWER, ansdesc);} catch(e) {console.log("E stL: " + e);}
-}
-		peerConnection.startIce();
-
 		havePC = true;
 	};
 
@@ -105,21 +93,48 @@
 		});
 
 	};
+
+	function startIce() {
+		peerConnection.startIce();
+	}
 	
-	function processOffer() {
+	function createOffer() {
+		var offer = peerConnection.createOffer(null);
+		sendOutOfBand("SDP", "offer", offer.toSdp());
+	}
+
+	function createAnswer() {
+//		var offer = new SessionDescription(SDP_in.value);
+		var answer = peerConnection.createAnswer(SDP_in.value, {has_video: true, has_audio: true });
+//				try {peerConnection.setLocalDescription(peerConnection.SDP_ANSWER, answer);} catch(e) {console.log("E sLA: " + e);}
+
+		sendOutOfBand("SDP", "answer", answer.toSdp());
+	}
+
+			
+	function setLocalOffer() {
 		alert("SDP_in: " + SDP_in.value);
 		var desc = new SessionDescription(SDP_in.value);
-		if (havePC == false) {
-			try {startSession(false, desc);} catch(e) {console.log("E st s: " +e);}
-		}
-		else {
-			try {peerConnection.startIce();} catch(e) {console.log("E stI: " + e);}
-		}
+		peerConnection.setLocalDescription(peerConnection.SDP_OFFER, desc);
+
 	}
-	function processAnswer() {
+
+	function setRemoteOffer() {
 		var desc = new SessionDescription(SDP_in.value);
-		peerConnection.setRemoteDescription(peerConnection.SDP_ANSWER, desc);
+		peerConnection.setRemoteDescription(peerConnection.SDP_OFFER, desc);
 	}	
+	
+	function setLocalAnswer() {
+		alert("SDP_in: " + SDP_in.value);
+		var desc = new SessionDescription(SDP_in.value);
+		try {peerConnection.setLocalDescription(peerConnection.SDP_ANSWER, desc);} catch(e) {console.log("E sLA: " + e);}
+	}
+		
+	function setRemoteAnswer() {
+		var desc = new SessionDescription(SDP_in.value);
+		try {peerConnection.setRemoteDescription(peerConnection.SDP_ANSWER, desc);} catch(e) {console.log("E sRA: " + e);}
+	}
+		
 
 	window.onload = function() { 
 		genStream();
@@ -130,16 +145,23 @@
 	<video id="selfView" width="320" height="240" autoplay muted></video>
 	<video id="remoteView" width="320" height="240" autoplay></video>
 
-
-	<div>myId:<input type="text" id="myId" size="12">
-	peerId:<input type="text" id="peerId" size="12" >
 	</div>
-	<input type="button" onclick="startSession(true, null)" value="Startsession" id="startButton"></input>
-	<input type="button" onclick="processOffer()" value="processOffer" id="processOffer"></input>
-	<input type="button" onclick="processAnswer()" value="processAnswer" id="processAnswer"></input>
+	<input type="button" onclick="startSession()" value="Startsession" id="startButton"></input>
+	<input type="button" onclick="createOffer()" value="createOffer" id="createOffer"></input>
+	<input type="button" onclick="createAnswer()" value="createAnswer" id="createAnswer"></input>
+	<input type="button" onclick="createAndSetAnswer()" value="createAndSetAnswer" id="createAndSetAnswer"></input>
+	<input type="button" onclick="startIce()" value="startIce" id="startIce"></input>
+
+	<input type="button" onclick="setLocalOffer()" value="setLocalOffer" id="setLocalOffer"></input>
+	<input type="button" onclick="setLocalAnswer()" value="setLocalAnswer" id="setLocalAnswer"></input>
+	<input type="button" onclick="startIce()" value="startIce" id="startIce"></input>
+
+	<input type="button" onclick="setRemoteOffer()" value="setRemoteOffer" id="setRemoteOffer"></input>
+	<input type="button" onclick="setRemoteAnswer()" value="setRemoteAnswer" id="setRemoteAnswer"></input>
 	<div>PeerConnStatus:<textarea rows="5" cols="30" id="PCstatus"></textarea></div>
 	<div>	<textarea rows="35" cols="80" id="SDP_out"></textarea></div>
 	<div>	<textarea rows="35" cols="80" id="SDP_in"></textarea></div>
+	<div>	<textarea rows="35" cols="80" id="SDP_in2"></textarea></div>
 
 
 
