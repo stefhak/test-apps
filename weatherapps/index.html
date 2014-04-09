@@ -1,0 +1,227 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml">
+<head>
+
+ <style type=text/css>  
+       div {  
+         float: left;  
+<!--         border :1px solid #444444;  -->
+<!--         padding:2px;  -->
+<!--         margin: 2px;  -->
+       }  
+     </style>  
+
+  <meta http-equiv="Content-Type" content="text/html; charset=utf-8"/>
+  <title>Luleåvädret</title>
+  <link rel="shortcut icon" href="favicon.ico" type="image/x-icon" />
+
+<script>
+var temps;
+      var city_temps = new Array();
+      var univ_temps = new Array();
+      var max_temp = -50;
+      var min_temp = 50;
+      var times = new Array();
+
+  function getTemps () {
+    function reqListener () {
+      console.log(this.responseText);
+      temps = JSON.parse(this.responseText);
+
+      temps.forEach(function (el, ix, array) {
+        var temp = el.temperatureLuleaCity;
+        if (!(isNaN(temp) || (temp === null))) {
+          if (temp > max_temp) max_temp = temp;
+          if (temp < min_temp) min_temp = temp;
+        }
+        city_temps[ix] = temp;
+
+        temp = el.temperatureLuleaUniversity;
+        if (!(isNaN(temp) || (temp === null))) {
+          if (temp > max_temp) max_temp = temp;
+          if (temp < min_temp) min_temp = temp;
+        }
+
+        univ_temps[ix] = temp;
+
+        temp = el.date;
+        temp = temp.substr(temp.indexOf("T") + 1, 2);
+        temp = parseInt(temp);
+        temp = (temp + 1) % 24;
+        times[ix]  = temp.toString();
+      });
+console.log(max_temp);
+
+console.log(min_temp);
+
+      var canv = document.getElementById("temp_hist");
+      var ctx = canv.getContext("2d");
+      var x_offset = 40;
+      var y_offset_bottom = 15;
+      var y_offset_top = 10;
+      var x_step = 30;
+      var h = document.getElementById("temp_hist").height;
+      var w = document.getElementById("temp_hist").width;
+      var top_line = Math.round((max_temp + 1));
+      console.log("top_line: " + top_line);
+      var bottom_line = Math.round((min_temp - 1));
+      console.log("bottom_line: " + bottom_line);
+      var n_y_gridlines = top_line - bottom_line + 1;
+      console.log("n_y_gridlines: " + n_y_gridlines);
+      var grid_y_distance =  (h - y_offset_bottom - y_offset_top) / (top_line - bottom_line);
+console.log("grid_y_distance: " + grid_y_distance);
+      ctx.strokeStyle = '#D8D8D8';
+      ctx.font = "10px Arial";
+      ctx.lineWidth = 1;
+      for (var n = 1; n < n_y_gridlines; n++) {
+         var y_pos = Math.round(h - y_offset_bottom - (n*grid_y_distance)) + 0.5;
+        ctx.beginPath();
+        ctx.moveTo(x_offset, y_pos);
+        ctx.lineTo(w, y_pos);
+        ctx.stroke();
+        var val_to_write = bottom_line + n;
+        ctx.fillText(val_to_write.toString(), 25, y_pos);
+       
+      }
+ 
+      times.forEach(function (el, ix, array) {
+        ctx.fillText(el, x_offset - 5+ ix*x_step, h - y_offset_bottom + 12);
+        ctx.beginPath();
+        ctx.moveTo(x_offset + ix*x_step,0);
+        ctx.lineTo(x_offset + ix*x_step, h - y_offset_bottom);
+        ctx.stroke();
+
+      });
+
+
+      ctx.strokeStyle = 'black';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.moveTo(x_offset,0);
+      ctx.lineTo(x_offset,h - y_offset_bottom);
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.moveTo(x_offset,h - y_offset_bottom);
+      ctx.lineTo(w,h - y_offset_bottom);
+      ctx.stroke();
+
+
+
+      ctx.stroke();
+      ctx.strokeStyle = 'green';
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+
+      ctx.moveTo(x_offset, h/2 - 10*temps[0].temperatureLuleaCity);
+      temps.forEach(function (el, ix, array) {
+        ctx.lineTo(x_offset + ix*x_step, h - y_offset_bottom - grid_y_distance*(el.temperatureLuleaCity - bottom_line));
+      });
+
+      ctx.stroke();
+
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.moveTo(w-45, 12);
+      ctx.lineTo(w-35, 12);
+      ctx.stroke();
+
+      ctx.fillText("City", w - 30, 15);
+      
+      ctx.lineWidth = 1;
+      ctx.strokeStyle = 'red';
+      ctx.beginPath();
+      ctx.moveTo(x_offset, h/2 - 10*temps[0].temperatureLuleaUniversity);
+      temps.forEach(function (el, ix, array) {
+        ctx.lineTo(x_offset + ix*x_step, h - y_offset_bottom - grid_y_distance*(el.temperatureLuleaUniversity - bottom_line));
+      });
+      ctx.stroke();
+
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.moveTo(w-45, 22);
+      ctx.lineTo(w-35, 22);
+      ctx.stroke();
+
+      ctx.fillText("Univ", w - 30, 25);
+
+    }
+
+    var oReq = new XMLHttpRequest();
+    oReq.onload = reqListener;
+    oReq.open("get", "test.txt", true);
+    oReq.send();
+
+  }
+
+  window.onload = getTemps;
+
+</script>
+
+
+
+
+</head>
+
+<body>
+
+<canvas id="temp_hist" width="800" height="300" style="border:1px solid #000000;"></canvas>
+
+<div id="temperatur">
+<!-- Temperatur från temperatur.nu -->
+<p>Temperatur just nu på Porsön/Universitetet: 
+<script type="text/javascript" src="http://www.temperatur.nu/jstemp.php?s=lulea"></script>
+</p>
+<p>Temperatur just nu i Luleå centrum:
+<script type="text/javascript" src="http://www.temperatur.nu/jstemp.php?s=lulea_city"></script>
+</p>
+</div>
+<div id="yr">
+  <script type="text/javascript" src="http://www.yr.no/sted/Sverige/Norrbotten/Luleå/ekstern_boks_time_for_time.js"></script><noscript><a href="http://www.yr.no/sted/Sverige/Norrbotten/Luleå/">yr.no: Værvarsel for Luleå</a></noscript>
+</div>
+<div id="smhi">
+<iframe src="http://www.smhi.se/vadret/vadret-i-sverige/land?pp=http://www.smhi.se/produktportal-1.0//hourByHourTable.do?geonameid=604490" width="1000px" height="5000px" frameborder="0" scrolling="no"></iframe> 
+</div>
+<!--
+<div id="c_41806b35afb407ed9320197ed62d1d2c"><h2><a id="h_41806b35afb407ed9320197ed62d1d2c" href="http://www.klart.se/">V�rldens v�der</a></h2><a id="l_41806b35afb407ed9320197ed62d1d2c" href="http://www.klart.se/v�der-lule�.html">Lule� v�dret</a></div><script type="text/javascript" src="http://www.klart.se/widget/widget_loader/41806b35afb407ed9320197ed62d1d2c"></script>
+</div>
+
+<div id="wx_module_7503">
+   <a href="http://www.weather.com/weather/local/SWXX0019">Lulea Weather Forecast, Sweden</a>
+</div>
+
+<div id="weather.com">
+<script type="text/javascript">
+
+   /* Locations can be edited manually by updating 'wx_locID' below.  Please also update */
+   /* the location name and link in the above div (wx_module) to reflect any changes made. */
+   var wx_locID = 'SWXX0019';
+
+   /* If you are editing locations manually and are adding multiple modules to one page, each */
+   /* module must have a unique div id.  Please append a unique # to the div above, as well */
+   /* as the one referenced just below.  If you use the builder to create individual modules  */
+   /* you will not need to edit these parameters. */
+   var wx_targetDiv = 'wx_module_7503';
+
+   /* Please do not change the configuration value [wx_config] manually - your module */
+   /* will no longer function if you do.  If at any time you wish to modify this */
+   /* configuration please use the graphical configuration tool found at */
+   /* https://registration.weather.com/ursa/wow/step2 */
+   var wx_config='SZ=300x250*WX=FHW*LNK=SSNL*UNT=C*BGI=spring*MAP=null|null*DN=www.fam-hakansson.se*TIER=0*PID=1063955531*MD5=8b5baafeb40494aa59fbeb28ce3c2054';
+
+   document.write('<scr'+'ipt src="'+document.location.protocol+'//wow.weather.com/weather/wow/module/'+wx_locID+'?config='+wx_config+'&proto='+document.location.protocol+'&target='+wx_targetDiv+'"></scr'+'ipt>');  
+</script>
+</div>
+
+
+<div id="SMHI">
+   <a href="http://www.smhi.se/vadret/vadret-i-sverige/land/forecast.do?mode=fiveDays&geonameid=604490">Länk till SMHI</a>
+</div>
+<div id="DMI">
+   <a href="http://www.dmi.dk/dmi/index/verden/verdensvejr.htm?country=Sverige&city=110046005">Länk till DMI</a>
+</div>
+
+ -->
+
+</body>
+</html>
