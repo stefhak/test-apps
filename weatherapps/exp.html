@@ -18,11 +18,15 @@
 
 <script>
 var temps;
-      var city_temps = new Array();
-      var univ_temps = new Array();
       var max_temp = -50;
       var min_temp = 50;
       var times = new Array();
+      var img = new Image();   // Create new img element
+
+  function getImg () {
+      img.src = 'cross.png'
+      img.onload = getTemps;
+  }
 
   function getTemps () {
     function reqListener () {
@@ -35,15 +39,12 @@ var temps;
           if (temp > max_temp) max_temp = temp;
           if (temp < min_temp) min_temp = temp;
         }
-        city_temps[ix] = temp;
 
         temp = el.temperatureLuleaUniversity;
         if (!(isNaN(temp) || (temp === null))) {
           if (temp > max_temp) max_temp = temp;
           if (temp < min_temp) min_temp = temp;
         }
-
-        univ_temps[ix] = temp;
 
         temp = el.date;
         temp = temp.substr(temp.indexOf("T") + 1, 2);
@@ -54,8 +55,7 @@ var temps;
 console.log(max_temp);
 
 console.log(min_temp);
-      var img = new Image();   // Create new img element
-      img.src = 'cross.png'
+
       var canv = document.getElementById("temp_hist");
       var ctx = canv.getContext("2d");
       var x_offset = 40;
@@ -164,7 +164,7 @@ console.log("grid_y_distance: " + grid_y_distance);
 
   }
 
-  window.onload = getTemps;
+  window.onload = getImg;
 
 </script>
 
